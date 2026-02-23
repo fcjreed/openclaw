@@ -20,6 +20,13 @@ import {
   removeConfigFormValue,
 } from "./controllers/config.ts";
 import {
+  loadCCTags,
+  queryCCRefs,
+  validateCC,
+  pruneCC,
+  deleteRef as deleteCCRef,
+} from "./controllers/context-commander.ts";
+import {
   loadCronRuns,
   toggleCronJob,
   runCronJob,
@@ -58,6 +65,7 @@ import { renderAgents } from "./views/agents.ts";
 import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderConfig } from "./views/config.ts";
+import { renderContextCommander } from "./views/context-commander.ts";
 import { renderCron } from "./views/cron.ts";
 import { renderDebug } from "./views/debug.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
@@ -347,6 +355,29 @@ export function renderApp(state: AppViewState) {
                 onRun: (job) => runCronJob(state, job),
                 onRemove: (job) => removeCronJob(state, job),
                 onLoadRuns: (jobId) => loadCronRuns(state, jobId),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "context-commander"
+            ? renderContextCommander({
+                loading: state.ccLoading,
+                tags: state.ccTags,
+                refs: state.ccRefs,
+                error: state.ccError,
+                queryTags: state.ccQueryTags,
+                queryMinScore: state.ccQueryMinScore,
+                queryExact: state.ccQueryExact,
+                validateResult: state.ccValidateResult,
+                onQueryTagsChange: (value) => (state.ccQueryTags = value),
+                onQueryMinScoreChange: (value) => (state.ccQueryMinScore = value),
+                onQueryExactChange: (value) => (state.ccQueryExact = value),
+                onRefresh: () => loadCCTags(state),
+                onQuery: () => queryCCRefs(state),
+                onValidate: () => validateCC(state),
+                onPrune: () => pruneCC(state),
+                onDelete: (refId) => deleteCCRef(state, refId),
               })
             : nothing
         }
