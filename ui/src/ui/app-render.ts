@@ -20,6 +20,14 @@ import {
   removeConfigFormValue,
 } from "./controllers/config.ts";
 import {
+  loadCCTags,
+  loadCCStats,
+  queryCCRefs,
+  validateCC,
+  pruneCC,
+  deleteRef as deleteCCRef,
+} from "./controllers/context-commander.ts";
+import {
   loadCronRuns,
   loadMoreCronJobs,
   loadMoreCronRuns,
@@ -69,6 +77,7 @@ import { renderAgents } from "./views/agents.ts";
 import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderConfig } from "./views/config.ts";
+import { renderContextCommander } from "./views/context-commander.ts";
 import { renderCron } from "./views/cron.ts";
 import { renderDebug } from "./views/debug.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
@@ -506,6 +515,33 @@ export function renderApp(state: AppViewState) {
                   }
                   await loadCronRuns(state, state.cronRunsJobId);
                 },
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "context-commander"
+            ? renderContextCommander({
+                loading: state.ccLoading,
+                tags: state.ccTags,
+                refs: state.ccRefs,
+                error: state.ccError,
+                stats: state.ccStats,
+                queryTags: state.ccQueryTags,
+                queryMinScore: state.ccQueryMinScore,
+                queryExact: state.ccQueryExact,
+                validateResult: state.ccValidateResult,
+                onQueryTagsChange: (value) => (state.ccQueryTags = value),
+                onQueryMinScoreChange: (value) => (state.ccQueryMinScore = value),
+                onQueryExactChange: (value) => (state.ccQueryExact = value),
+                onRefresh: () => {
+                  void loadCCTags(state);
+                  void loadCCStats(state);
+                },
+                onQuery: () => queryCCRefs(state),
+                onValidate: () => validateCC(state),
+                onPrune: () => pruneCC(state),
+                onDelete: (refId) => deleteCCRef(state, refId),
               })
             : nothing
         }

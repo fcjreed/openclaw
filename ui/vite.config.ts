@@ -38,6 +38,12 @@ export default defineConfig(() => {
       host: true,
       port: 5173,
       strictPort: true,
+      proxy: {
+        "/__openclaw": {
+          target: "http://localhost:18789",
+          changeOrigin: true,
+        },
+      },
     },
   };
 });

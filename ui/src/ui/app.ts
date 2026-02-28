@@ -53,6 +53,14 @@ import {
 import type { AppViewState } from "./app-view-state.ts";
 import { normalizeAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import {
+  loadCCTags as loadCCTagsInternal,
+  loadCCStats as loadCCStatsInternal,
+  queryCCRefs as queryCCRefsInternal,
+  validateCC as validateCCInternal,
+  pruneCC as pruneCCInternal,
+  deleteRef as deleteRefInternal,
+} from "./controllers/context-commander.ts";
 import type { CronFieldErrors } from "./controllers/cron.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
@@ -333,6 +341,17 @@ export class OpenClawApp extends LitElement {
   @state() cronModelSuggestions: string[] = [];
   @state() cronBusy = false;
 
+  @state() ccLoading = false;
+  @state() ccTags: import("./controllers/context-commander.ts").CCTag[] = [];
+  @state() ccRefs: import("./controllers/context-commander.ts").CCRef[] = [];
+  @state() ccError: string | null = null;
+  @state() ccSelectedRefId: number | null = null;
+  @state() ccQueryTags = "";
+  @state() ccQueryMinScore = "0";
+  @state() ccQueryExact = false;
+  @state() ccValidateResult: string | null = null;
+  @state() ccStats: import("./controllers/context-commander.ts").CCStats | null = null;
+
   @state() updateAvailable: import("./types.js").UpdateAvailable | null = null;
 
   @state() skillsLoading = false;
@@ -472,6 +491,27 @@ export class OpenClawApp extends LitElement {
 
   async loadCron() {
     await loadCronInternal(this as unknown as Parameters<typeof loadCronInternal>[0]);
+  }
+
+  async handleLoadCC() {
+    await loadCCTagsInternal(this as unknown as Parameters<typeof loadCCTagsInternal>[0]);
+    await loadCCStatsInternal(this as unknown as Parameters<typeof loadCCStatsInternal>[0]);
+  }
+
+  async handleCCQuery() {
+    await queryCCRefsInternal(this as unknown as Parameters<typeof queryCCRefsInternal>[0]);
+  }
+
+  async handleCCValidate() {
+    await validateCCInternal(this as unknown as Parameters<typeof validateCCInternal>[0]);
+  }
+
+  async handleCCPrune() {
+    await pruneCCInternal(this as unknown as Parameters<typeof pruneCCInternal>[0]);
+  }
+
+  async handleCCDelete(refId: number) {
+    await deleteRefInternal(this as unknown as Parameters<typeof deleteRefInternal>[0], refId);
   }
 
   async handleAbortChat() {

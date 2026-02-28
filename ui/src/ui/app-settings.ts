@@ -12,6 +12,7 @@ import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
+import { loadCCTags, loadCCStats } from "./controllers/context-commander.ts";
 import {
   loadCronJobs,
   loadCronModelSuggestions,
@@ -198,6 +199,10 @@ export async function refreshActiveTab(host: SettingsHost) {
   }
   if (host.tab === "cron") {
     await loadCron(host);
+  }
+  if (host.tab === "context-commander") {
+    await loadCCTags(host as unknown as OpenClawApp);
+    await loadCCStats(host as unknown as OpenClawApp);
   }
   if (host.tab === "skills") {
     await loadSkills(host as unknown as OpenClawApp);
