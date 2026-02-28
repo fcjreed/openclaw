@@ -57,6 +57,7 @@ import {
   resolveSkillsPromptForRun,
   type SkillSnapshot,
 } from "../skills.js";
+import { checkAgentCompliance } from "../tools/compliance-check.js";
 import { resolveTranscriptPolicy } from "../transcript-policy.js";
 import {
   compactWithSafetyTimeout,
@@ -482,6 +483,11 @@ export async function compactEmbeddedPiSessionDirect(
     });
     const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
     const ownerDisplay = resolveOwnerDisplaySetting(params.config);
+
+    // Tier 2: Check agent memory compliance and generate nudge if needed
+    const complianceResult = await checkAgentCompliance(sessionAgentId, 3);
+    const complianceNudge = complianceResult.nudge ?? undefined;
+
     const appendPrompt = buildEmbeddedSystemPrompt({
       workspaceDir: effectiveWorkspace,
       defaultThinkLevel: params.thinkLevel,
@@ -510,6 +516,7 @@ export async function compactEmbeddedPiSessionDirect(
       userTimeFormat,
       contextFiles,
       memoryCitationsMode: params.config?.memory?.citations,
+      complianceNudge,
     });
     const systemPromptOverride = createSystemPromptOverride(appendPrompt);
 

@@ -38,6 +38,7 @@ function buildMemorySection(params: {
   isMinimal: boolean;
   availableTools: Set<string>;
   citationsMode?: MemoryCitationsMode;
+  complianceNudge?: string;
 }) {
   if (params.isMinimal) {
     return [];
@@ -57,6 +58,9 @@ function buildMemorySection(params: {
     lines.push(
       "Citations: include Source: <path#line> when it helps the user verify memory snippets.",
     );
+  }
+  if (params.complianceNudge) {
+    lines.push("", params.complianceNudge);
   }
   lines.push("");
   return lines;
@@ -232,6 +236,8 @@ export function buildAgentSystemPrompt(params: {
     channel: string;
   };
   memoryCitationsMode?: MemoryCitationsMode;
+  /** Optional compliance nudge injected after the Memory Recall section. */
+  complianceNudge?: string;
 }) {
   const acpEnabled = params.acpEnabled !== false;
   const coreToolSummaries: Record<string, string> = {
@@ -402,6 +408,7 @@ export function buildAgentSystemPrompt(params: {
     isMinimal,
     availableTools,
     citationsMode: params.memoryCitationsMode,
+    complianceNudge: params.complianceNudge,
   });
   const docsSection = buildDocsSection({
     docsPath: params.docsPath,
