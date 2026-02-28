@@ -22,6 +22,8 @@ import {
 import {
   loadCCTags,
   loadCCStats,
+  loadCCActivity,
+  loadCCCompliance,
   queryCCRefs,
   validateCC,
   pruneCC,
@@ -531,17 +533,29 @@ export function renderApp(state: AppViewState) {
                 queryMinScore: state.ccQueryMinScore,
                 queryExact: state.ccQueryExact,
                 validateResult: state.ccValidateResult,
+                activity: state.ccActivity,
+                activityLoading: state.ccActivityLoading,
+                compliance: state.ccCompliance,
+                complianceLoading: state.ccComplianceLoading,
+                complianceDays: state.ccComplianceDays,
                 onQueryTagsChange: (value) => (state.ccQueryTags = value),
                 onQueryMinScoreChange: (value) => (state.ccQueryMinScore = value),
                 onQueryExactChange: (value) => (state.ccQueryExact = value),
                 onRefresh: () => {
                   void loadCCTags(state);
                   void loadCCStats(state);
+                  void loadCCActivity(state);
+                  void loadCCCompliance(state);
                 },
                 onQuery: () => queryCCRefs(state),
                 onValidate: () => validateCC(state),
                 onPrune: () => pruneCC(state),
                 onDelete: (refId) => deleteCCRef(state, refId),
+                onRefreshActivity: () => loadCCActivity(state),
+                onRefreshCompliance: (days) => {
+                  state.ccComplianceDays = days ?? state.ccComplianceDays;
+                  void loadCCCompliance(state, days);
+                },
               })
             : nothing
         }

@@ -351,6 +351,12 @@ export class OpenClawApp extends LitElement {
   @state() ccQueryExact = false;
   @state() ccValidateResult: string | null = null;
   @state() ccStats: import("./controllers/context-commander.ts").CCStats | null = null;
+  @state() ccActivity: import("./controllers/context-commander.ts").CCActivityEntry[] = [];
+  @state() ccActivityLoading = false;
+  @state() ccCompliance: import("./controllers/context-commander.ts").CCComplianceData | null =
+    null;
+  @state() ccComplianceLoading = false;
+  @state() ccComplianceDays = 7;
 
   @state() updateAvailable: import("./types.js").UpdateAvailable | null = null;
 

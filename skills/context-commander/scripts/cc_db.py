@@ -365,6 +365,152 @@ class ContextCommanderDB:
         return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------
+    # Activity Logging
+    # ------------------------------------------------------------------
+
+    def log_activity(
+        self,
+        operation: str,
+        agent_id: str | None = None,
+        session_key: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> int:
+        """Record an agent memory operation.
+
+        Args:
+            operation: The operation type (e.g., 'cc_query', 'memory_search').
+            agent_id: Agent identifier (e.g., 'main', 'discord').
+            session_key: Full session key.
+            details: Optional JSON-serializable dict with operation-specific data.
+
+        Returns:
+            The activity_log row id.
+        """
+        import json as _json
+
+        details_str = _json.dumps(details) if details else None
+        cur = self._conn.execute(
+            """
+            INSERT INTO activity_log (operation, agent_id, session_key, details)
+            VALUES (?, ?, ?, ?)
+            """,
+            (operation, agent_id, session_key, details_str),
+        )
+        self._conn.commit()
+        return cur.lastrowid  # type: ignore[return-value]
+
+    def get_activity(
+        self,
+        agent_id: str | None = None,
+        operation: str | None = None,
+        since: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Query recent activity log entries.
+
+        Args:
+            agent_id: Filter by agent (optional).
+            operation: Filter by operation type (optional).
+            since: ISO datetime string — only return entries after this time.
+            limit: Maximum entries to return.
+
+        Returns:
+            List of activity log dicts, newest first.
+        """
+        import json as _json
+
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if agent_id:
+            conditions.append("agent_id = ?")
+            params.append(agent_id)
+        if operation:
+            conditions.append("operation = ?")
+            params.append(operation)
+        if since:
+            conditions.append("created_at >= ?")
+            params.append(since)
+
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+        query = f"SELECT * FROM activity_log{where} ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        rows = self._conn.execute(query, params).fetchall()
+        results = []
+        for row in rows:
+            entry = dict(row)
+            if entry.get("details"):
+                try:
+                    entry["details"] = _json.loads(entry["details"])
+                except (ValueError, TypeError):
+                    pass
+            results.append(entry)
+        return results
+
+    def get_agent_compliance(self, days: int = 7) -> dict[str, Any]:
+        """Get per-agent compliance summary over the last N days.
+
+        Returns a dict with:
+            agents: list of per-agent stats (reads, writes, cc_queries, cc_indexes, last_active)
+            period_days: the number of days covered
+            total_operations: total operations in the period
+        """
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+        # Get all agents that have any activity
+        rows = self._conn.execute(
+            """
+            SELECT
+                COALESCE(agent_id, '(unknown)') AS agent,
+                COUNT(*) AS total_ops,
+                SUM(CASE WHEN operation IN ('cc_query', 'memory_search', 'memory_get', 'memory_read') THEN 1 ELSE 0 END) AS reads,
+                SUM(CASE WHEN operation IN ('cc_index', 'memory_write') THEN 1 ELSE 0 END) AS writes,
+                SUM(CASE WHEN operation = 'cc_query' THEN 1 ELSE 0 END) AS cc_queries,
+                SUM(CASE WHEN operation = 'cc_index' THEN 1 ELSE 0 END) AS cc_indexes,
+                SUM(CASE WHEN operation = 'memory_search' THEN 1 ELSE 0 END) AS memory_searches,
+                SUM(CASE WHEN operation = 'memory_get' THEN 1 ELSE 0 END) AS memory_gets,
+                SUM(CASE WHEN operation = 'memory_write' THEN 1 ELSE 0 END) AS memory_writes,
+                MAX(created_at) AS last_active
+            FROM activity_log
+            WHERE created_at >= ?
+            GROUP BY COALESCE(agent_id, '(unknown)')
+            ORDER BY total_ops DESC
+            """,
+            (cutoff,),
+        ).fetchall()
+
+        agents = []
+        total_ops = 0
+        for row in rows:
+            agent_data = dict(row)
+            total_ops += agent_data["total_ops"]
+            agents.append(agent_data)
+
+        # Activity timeline (operations per day)
+        timeline_rows = self._conn.execute(
+            """
+            SELECT DATE(created_at) AS day,
+                   COALESCE(agent_id, '(unknown)') AS agent,
+                   COUNT(*) AS count
+            FROM activity_log
+            WHERE created_at >= ?
+            GROUP BY DATE(created_at), COALESCE(agent_id, '(unknown)')
+            ORDER BY day DESC
+            """,
+            (cutoff,),
+        ).fetchall()
+
+        timeline = [dict(r) for r in timeline_rows]
+
+        return {
+            "agents": agents,
+            "period_days": days,
+            "total_operations": total_ops,
+            "timeline": timeline,
+        }
+
+    # ------------------------------------------------------------------
     # Statistics
     # ------------------------------------------------------------------
 
@@ -470,6 +616,29 @@ class ContextCommanderDB:
             s["db_size_bytes"] = os.path.getsize(str(self.db_path))
         except OSError:
             s["db_size_bytes"] = None
+
+        # Activity summary (last 7 days)
+        try:
+            row = self._conn.execute(
+                "SELECT COUNT(*) AS c FROM activity_log WHERE created_at >= datetime('now', '-7 days')"
+            ).fetchone()
+            s["activity_ops_7d"] = row["c"] if row else 0
+
+            rows = self._conn.execute(
+                """
+                SELECT COALESCE(agent_id, '(unknown)') AS agent, COUNT(*) AS c
+                FROM activity_log
+                WHERE created_at >= datetime('now', '-7 days')
+                GROUP BY COALESCE(agent_id, '(unknown)')
+                ORDER BY c DESC
+                LIMIT 5
+                """
+            ).fetchall()
+            s["active_agents_7d"] = [{"agent": r["agent"], "count": r["c"]} for r in rows]
+        except Exception:
+            # Table might not exist yet in older DBs
+            s["activity_ops_7d"] = 0
+            s["active_agents_7d"] = []
 
         return s
 

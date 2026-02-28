@@ -61,6 +61,35 @@ export type CCStats = {
   db_size_bytes: number | null;
 };
 
+export type CCActivityEntry = {
+  id: number;
+  operation: string;
+  agent_id: string | null;
+  session_key: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type CCAgentCompliance = {
+  agent: string;
+  total_ops: number;
+  reads: number;
+  writes: number;
+  cc_queries: number;
+  cc_indexes: number;
+  memory_searches: number;
+  memory_gets: number;
+  memory_writes: number;
+  last_active: string | null;
+};
+
+export type CCComplianceData = {
+  agents: CCAgentCompliance[];
+  period_days: number;
+  total_operations: number;
+  timeline: { day: string; agent: string; count: number }[];
+};
+
 export type CCState = {
   client: GatewayBrowserClient | null;
   connected: boolean;
@@ -74,6 +103,11 @@ export type CCState = {
   ccQueryExact: boolean;
   ccValidateResult: string | null;
   ccStats: CCStats | null;
+  ccActivity: CCActivityEntry[];
+  ccActivityLoading: boolean;
+  ccCompliance: CCComplianceData | null;
+  ccComplianceLoading: boolean;
+  ccComplianceDays: number;
 };
 
 export async function loadCCStats(state: CCState) {
@@ -202,5 +236,41 @@ export async function deleteRef(state: CCState, refId: number) {
     await loadCCTags(state);
   } catch (err) {
     state.ccError = String(err);
+  }
+}
+
+export async function loadCCActivity(state: CCState, limit = 50) {
+  if (!state.client || !state.connected) {
+    return;
+  }
+  state.ccActivityLoading = true;
+  try {
+    const res = await state.client.request<{
+      ok?: boolean;
+      entries?: CCActivityEntry[];
+    }>("context-commander.activity", { limit });
+    state.ccActivity = Array.isArray(res.entries) ? res.entries : [];
+  } catch {
+    state.ccActivity = [];
+  } finally {
+    state.ccActivityLoading = false;
+  }
+}
+
+export async function loadCCCompliance(state: CCState, days?: number) {
+  if (!state.client || !state.connected) {
+    return;
+  }
+  state.ccComplianceLoading = true;
+  try {
+    const res = await state.client.request<{
+      ok?: boolean;
+      compliance?: CCComplianceData;
+    }>("context-commander.compliance", { days: days ?? state.ccComplianceDays ?? 7 });
+    state.ccCompliance = res.compliance ?? null;
+  } catch {
+    state.ccCompliance = null;
+  } finally {
+    state.ccComplianceLoading = false;
   }
 }

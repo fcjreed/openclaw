@@ -38,7 +38,21 @@ CREATE TABLE IF NOT EXISTS ref_origins (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Activity log: tracks all memory operations by agent/session
+CREATE TABLE IF NOT EXISTS activity_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    operation   TEXT NOT NULL,       -- 'cc_query', 'cc_index', 'cc_delete', 'cc_validate', 'cc_prune',
+                                     -- 'memory_search', 'memory_get', 'memory_read', 'memory_write'
+    agent_id    TEXT,                -- e.g., 'main', 'discord', sub-agent label
+    session_key TEXT,                -- full session key (e.g., 'agent:main:discord:316355197024600067')
+    details     TEXT,                -- JSON blob with operation-specific data
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
 CREATE INDEX IF NOT EXISTS idx_ref_tags_tag ON ref_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_refs_location ON refs(location);
 CREATE INDEX IF NOT EXISTS idx_refs_stale ON refs(stale);
+CREATE INDEX IF NOT EXISTS idx_activity_log_agent ON activity_log(agent_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_op ON activity_log(operation);
+CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);

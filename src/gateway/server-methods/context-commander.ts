@@ -28,6 +28,21 @@ function runCC(args: string[]): Promise<{ ok: boolean; data: unknown }> {
   });
 }
 
+function runCCWithAgent(
+  args: string[],
+  agentId?: string,
+  sessionKey?: string,
+): Promise<{ ok: boolean; data: unknown }> {
+  const fullArgs = [...args];
+  if (agentId) {
+    fullArgs.unshift("--agent", agentId);
+  }
+  if (sessionKey) {
+    fullArgs.unshift("--session", sessionKey);
+  }
+  return runCC(fullArgs);
+}
+
 export const contextCommanderHandlers: GatewayRequestHandlers = {
   "context-commander.tags": async ({ respond }) => {
     try {
@@ -174,6 +189,8 @@ export const contextCommanderHandlers: GatewayRequestHandlers = {
       snippet?: string;
       tags?: string;
       score?: number;
+      agentId?: string;
+      sessionKey?: string;
     };
     if (!p.type || !["file", "web", "snippet"].includes(p.type)) {
       respond(
@@ -203,13 +220,94 @@ export const contextCommanderHandlers: GatewayRequestHandlers = {
       args.push("--score", String(p.score));
     }
     try {
-      const result = await runCC(args);
+      const result = await runCCWithAgent(args, p.agentId, p.sessionKey);
       respond(true, result, undefined);
     } catch (err) {
       respond(
         false,
         undefined,
         errorShape(ErrorCodes.UNAVAILABLE, `context-commander.index failed: ${String(err)}`),
+      );
+    }
+  },
+
+  "context-commander.log": async ({ params, respond }) => {
+    const p = params as {
+      operation?: string;
+      agentId?: string;
+      sessionKey?: string;
+      details?: Record<string, unknown>;
+    };
+    if (!p.operation) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "context-commander.log requires operation"),
+      );
+      return;
+    }
+    const args = ["log", p.operation];
+    if (p.details) {
+      args.push("--details", JSON.stringify(p.details));
+    }
+    try {
+      const result = await runCCWithAgent(args, p.agentId, p.sessionKey);
+      respond(true, result, undefined);
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, `context-commander.log failed: ${String(err)}`),
+      );
+    }
+  },
+
+  "context-commander.activity": async ({ params, respond }) => {
+    const p = params as {
+      agentId?: string;
+      operation?: string;
+      since?: string;
+      limit?: number;
+    };
+    const args = ["activity"];
+    if (p.agentId) {
+      args.push("--filter-agent", p.agentId);
+    }
+    if (p.operation) {
+      args.push("--filter-op", p.operation);
+    }
+    if (p.since) {
+      args.push("--since", p.since);
+    }
+    if (typeof p.limit === "number") {
+      args.push("--limit", String(p.limit));
+    }
+    try {
+      const result = await runCC(args);
+      respond(true, result, undefined);
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, `context-commander.activity failed: ${String(err)}`),
+      );
+    }
+  },
+
+  "context-commander.compliance": async ({ params, respond }) => {
+    const p = params as { days?: number };
+    const args = ["compliance"];
+    if (typeof p.days === "number") {
+      args.push("--days", String(p.days));
+    }
+    try {
+      const result = await runCC(args);
+      respond(true, result, undefined);
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, `context-commander.compliance failed: ${String(err)}`),
       );
     }
   },

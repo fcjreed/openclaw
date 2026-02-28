@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { MemoryCitationsMode } from "../../config/types.memory.js";
@@ -9,6 +10,41 @@ import { resolveSessionAgentId } from "../agent-scope.js";
 import { resolveMemorySearchConfig } from "../memory-search.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readNumberParam, readStringParam } from "./common.js";
+
+// ------------------------------------------------------------------
+// Activity logging (fire-and-forget to Context Commander)
+// ------------------------------------------------------------------
+const CC_PYTHON = "/usr/bin/python3";
+const CC_SCRIPT = "/home/finalchrono/openclaw/skills/context-commander/scripts/cc.py";
+const CC_DB = "/home/finalchrono/openclaw/skills/context-commander/db/context-commander.db";
+
+function logMemoryActivity(
+  operation: string,
+  sessionKey: string | undefined,
+  details: Record<string, unknown>,
+) {
+  try {
+    const parsed = parseAgentSessionKey(sessionKey);
+    const agentId = parsed?.agentId ?? "unknown";
+    const args = [
+      CC_SCRIPT,
+      "--db",
+      CC_DB,
+      "--json",
+      "--agent",
+      agentId,
+      ...(sessionKey ? ["--session", sessionKey] : []),
+      "log",
+      operation,
+      "--details",
+      JSON.stringify(details),
+    ];
+    // Fire-and-forget: don't await, don't block the tool response
+    execFile(CC_PYTHON, args, { timeout: 5000 }, () => {});
+  } catch {
+    // Never let logging break the tool
+  }
+}
 
 const MemorySearchSchema = Type.Object({
   query: Type.String(),
@@ -61,6 +97,10 @@ export function createMemorySearchTool(options: {
         agentId,
       });
       if (!manager) {
+        logMemoryActivity("memory_search", options.agentSessionKey, {
+          query,
+          error: error ?? "unavailable",
+        });
         return jsonResult(buildMemorySearchUnavailableResult(error));
       }
       try {
@@ -82,6 +122,10 @@ export function createMemorySearchTool(options: {
             ? clampResultsByInjectedChars(decorated, resolved.qmd?.limits.maxInjectedChars)
             : decorated;
         const searchMode = (status.custom as { searchMode?: string } | undefined)?.searchMode;
+        logMemoryActivity("memory_search", options.agentSessionKey, {
+          query,
+          resultCount: results.length,
+        });
         return jsonResult({
           results,
           provider: status.provider,
@@ -92,6 +136,10 @@ export function createMemorySearchTool(options: {
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        logMemoryActivity("memory_search", options.agentSessionKey, {
+          query,
+          error: message,
+        });
         return jsonResult(buildMemorySearchUnavailableResult(message));
       }
     },
@@ -122,6 +170,10 @@ export function createMemoryGetTool(options: {
         agentId,
       });
       if (!manager) {
+        logMemoryActivity("memory_get", options.agentSessionKey, {
+          path: relPath,
+          error: error ?? "unavailable",
+        });
         return jsonResult({ path: relPath, text: "", disabled: true, error });
       }
       try {
@@ -130,9 +182,18 @@ export function createMemoryGetTool(options: {
           from: from ?? undefined,
           lines: lines ?? undefined,
         });
+        logMemoryActivity("memory_get", options.agentSessionKey, {
+          path: relPath,
+          from,
+          lines,
+        });
         return jsonResult(result);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        logMemoryActivity("memory_get", options.agentSessionKey, {
+          path: relPath,
+          error: message,
+        });
         return jsonResult({ path: relPath, text: "", disabled: true, error: message });
       }
     },

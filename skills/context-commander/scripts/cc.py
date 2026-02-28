@@ -96,6 +96,19 @@ def _serialize_ref(ref: dict) -> dict:
 # ------------------------------------------------------------------
 
 
+def _log_activity(db: ContextCommanderDB, args: argparse.Namespace, operation: str, details: dict | None = None) -> None:
+    """Log an activity entry if the activity_log table exists."""
+    try:
+        db.log_activity(
+            operation=operation,
+            agent_id=getattr(args, "agent", None),
+            session_key=getattr(args, "session", None),
+            details=details,
+        )
+    except Exception:
+        pass  # Don't let logging failures break operations
+
+
 def cmd_index(args: argparse.Namespace) -> None:
     """Index a new reference."""
     db = _get_db(args)
@@ -125,6 +138,13 @@ def cmd_index(args: argparse.Namespace) -> None:
                     continue
                 tag_id = db.add_tag(tag_name)
                 db.tag_ref(ref_id, tag_id, score=args.score)
+
+        _log_activity(db, args, "cc_index", {
+            "ref_id": ref_id,
+            "type": args.type,
+            "location": args.location,
+            "tags": args.tag,
+        })
 
         if args.json:
             ref = db.get_ref(ref_id)
@@ -159,6 +179,12 @@ def cmd_query(args: argparse.Namespace) -> None:
             include_stale=args.include_stale,
             exact=args.exact,
         )
+
+        _log_activity(db, args, "cc_query", {
+            "tags": tags,
+            "min_score": args.min_score,
+            "result_count": len(results),
+        })
 
         if args.json:
             print(json.dumps({"ok": True, "refs": [_serialize_ref(r) for r in results]}))
@@ -209,6 +235,12 @@ def cmd_validate(args: argparse.Namespace) -> None:
                 fresh_count += 1
                 details.append({"id": ref["id"], "status": "fresh", "location": ref["location"]})
 
+        _log_activity(db, args, "cc_validate", {
+            "total": len(file_refs),
+            "fresh": fresh_count,
+            "stale": stale_count,
+        })
+
         if args.json:
             print(json.dumps({"ok": True, "total": len(file_refs), "fresh": fresh_count, "stale": stale_count, "details": details}))
         else:
@@ -225,6 +257,7 @@ def cmd_prune(args: argparse.Namespace) -> None:
             stale_only=args.stale,
             older_than_days=args.older_than,
         )
+        _log_activity(db, args, "cc_prune", {"pruned": count})
         if args.json:
             print(json.dumps({"ok": True, "pruned": count}))
         else:
@@ -275,6 +308,7 @@ def cmd_delete(args: argparse.Namespace) -> None:
     db = _get_db(args)
     try:
         deleted = db.delete_ref(args.ref_id)
+        _log_activity(db, args, "cc_delete", {"ref_id": args.ref_id, "deleted": deleted})
         if args.json:
             print(json.dumps({"ok": True, "deleted": deleted, "ref_id": args.ref_id}))
         else:
@@ -282,6 +316,87 @@ def cmd_delete(args: argparse.Namespace) -> None:
                 print(f"Deleted ref #{args.ref_id}.")
             else:
                 print(f"Reference #{args.ref_id} not found.")
+    finally:
+        db.close()
+
+
+def cmd_log(args: argparse.Namespace) -> None:
+    """Log a memory operation (called externally by gateway hooks)."""
+    db = _get_db(args)
+    try:
+        details = None
+        if args.details:
+            try:
+                details = json.loads(args.details)
+            except (ValueError, TypeError):
+                details = {"raw": args.details}
+
+        row_id = db.log_activity(
+            operation=args.operation,
+            agent_id=args.agent,
+            session_key=args.session,
+            details=details,
+        )
+        if args.json:
+            print(json.dumps({"ok": True, "id": row_id}))
+        else:
+            print(f"Logged activity #{row_id}: {args.operation}")
+    finally:
+        db.close()
+
+
+def cmd_activity(args: argparse.Namespace) -> None:
+    """Show recent activity log."""
+    db = _get_db(args)
+    try:
+        entries = db.get_activity(
+            agent_id=args.filter_agent,
+            operation=args.filter_op,
+            since=args.since,
+            limit=args.limit,
+        )
+
+        if args.json:
+            print(json.dumps({"ok": True, "entries": entries, "count": len(entries)}))
+        else:
+            if not entries:
+                print("No activity found.")
+                return
+            print(f"Recent activity ({len(entries)} entries):")
+            for e in entries:
+                agent = e.get("agent_id") or "(unknown)"
+                op = e.get("operation", "?")
+                ts = e.get("created_at", "?")
+                detail_str = ""
+                if e.get("details") and isinstance(e["details"], dict):
+                    detail_str = " " + json.dumps(e["details"])
+                print(f"  [{ts}] {agent:<16} {op:<20}{detail_str}")
+    finally:
+        db.close()
+
+
+def cmd_compliance(args: argparse.Namespace) -> None:
+    """Show per-agent compliance summary."""
+    db = _get_db(args)
+    try:
+        data = db.get_agent_compliance(days=args.days)
+
+        if args.json:
+            print(json.dumps({"ok": True, "compliance": data}))
+        else:
+            if not data["agents"]:
+                print(f"No agent activity in the last {args.days} days.")
+                return
+            print(f"Agent Compliance — Last {args.days} days")
+            print(f"{'=' * 70}")
+            print(f"  {'Agent':<20} {'Total':>6} {'Reads':>6} {'Writes':>6} {'CC Q':>6} {'CC Idx':>6} {'Last Active'}")
+            print(f"  {'-' * 20} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 20}")
+            for a in data["agents"]:
+                print(
+                    f"  {a['agent']:<20} {a['total_ops']:>6} {a['reads']:>6} {a['writes']:>6} "
+                    f"{a['cc_queries']:>6} {a['cc_indexes']:>6} {a.get('last_active', '?')}"
+                )
+            print(f"\n  Total operations: {data['total_operations']}")
     finally:
         db.close()
 
@@ -394,6 +509,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Output results as JSON instead of human-readable text",
     )
+    parser.add_argument(
+        "--agent",
+        type=str,
+        default=None,
+        help="Agent identifier for activity tracking (e.g., 'main', 'discord')",
+    )
+    parser.add_argument(
+        "--session",
+        type=str,
+        default=None,
+        help="Session key for activity tracking",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     # --- index ---
@@ -436,6 +563,22 @@ def build_parser() -> argparse.ArgumentParser:
     # --- stats ---
     sub.add_parser("stats", help="Show aggregate statistics about the index")
 
+    # --- log ---
+    p_log = sub.add_parser("log", help="Log a memory operation (for external callers)")
+    p_log.add_argument("operation", type=str, help="Operation type (e.g., memory_search, memory_write)")
+    p_log.add_argument("--details", type=str, default=None, help="JSON string with operation details")
+
+    # --- activity ---
+    p_activity = sub.add_parser("activity", help="Show recent activity log")
+    p_activity.add_argument("--filter-agent", type=str, default=None, help="Filter by agent ID")
+    p_activity.add_argument("--filter-op", type=str, default=None, help="Filter by operation type")
+    p_activity.add_argument("--since", type=str, default=None, help="Only show entries after this ISO datetime")
+    p_activity.add_argument("--limit", type=int, default=50, help="Maximum entries to return")
+
+    # --- compliance ---
+    p_compliance = sub.add_parser("compliance", help="Show per-agent compliance summary")
+    p_compliance.add_argument("--days", type=int, default=7, help="Number of days to look back")
+
     return parser
 
 
@@ -453,6 +596,9 @@ def main() -> None:
         "tags": cmd_tags,
         "delete": cmd_delete,
         "stats": cmd_stats,
+        "log": cmd_log,
+        "activity": cmd_activity,
+        "compliance": cmd_compliance,
     }
     dispatch[args.command](args)
 
