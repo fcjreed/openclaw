@@ -33,6 +33,16 @@ import {
   removeConfigFormValue,
 } from "./controllers/config.ts";
 import {
+  loadCCTags,
+  loadCCStats,
+  loadCCActivity,
+  loadCCCompliance,
+  queryCCRefs,
+  validateCC,
+  pruneCC,
+  deleteRef as deleteCCRef,
+} from "./controllers/context-commander.ts";
+import {
   loadCronRuns,
   loadMoreCronJobs,
   loadMoreCronRuns,
@@ -128,6 +138,7 @@ const lazyLogs = createLazy(() => import("./views/logs.ts"));
 const lazyNodes = createLazy(() => import("./views/nodes.ts"));
 const lazySessions = createLazy(() => import("./views/sessions.ts"));
 const lazySkills = createLazy(() => import("./views/skills.ts"));
+const lazyContextCommander = createLazy(() => import("./views/context-commander.ts"));
 
 function lazyRender<M>(getter: () => M | null, render: (mod: M) => unknown) {
   const mod = getter();
@@ -1320,6 +1331,47 @@ export function renderApp(state: AppViewState) {
                         ? { kind: "node" as const, nodeId: state.execApprovalsTargetNodeId }
                         : { kind: "gateway" as const };
                     return saveExecApprovals(state, target);
+                  },
+                }),
+              )
+            : nothing
+        }
+
+        ${
+          state.tab === "memory"
+            ? lazyRender(lazyContextCommander, (m) =>
+                m.renderContextCommander({
+                  loading: state.ccLoading,
+                  tags: state.ccTags,
+                  refs: state.ccRefs,
+                  error: state.ccError,
+                  stats: state.ccStats,
+                  queryTags: state.ccQueryTags,
+                  queryMinScore: state.ccQueryMinScore,
+                  queryExact: state.ccQueryExact,
+                  validateResult: state.ccValidateResult,
+                  activity: state.ccActivity,
+                  activityLoading: state.ccActivityLoading,
+                  compliance: state.ccCompliance,
+                  complianceLoading: state.ccComplianceLoading,
+                  complianceDays: state.ccComplianceDays,
+                  onQueryTagsChange: (value) => (state.ccQueryTags = value),
+                  onQueryMinScoreChange: (value) => (state.ccQueryMinScore = value),
+                  onQueryExactChange: (value) => (state.ccQueryExact = value),
+                  onRefresh: () => {
+                    void loadCCTags(state);
+                    void loadCCStats(state);
+                  },
+                  onQuery: () => queryCCRefs(state),
+                  onValidate: () => validateCC(state),
+                  onPrune: () => pruneCC(state),
+                  onDelete: (refId) => deleteCCRef(state, refId),
+                  onRefreshActivity: () => loadCCActivity(state),
+                  onRefreshCompliance: (days) => {
+                    if (days != null) {
+                      state.ccComplianceDays = days;
+                    }
+                    void loadCCCompliance(state, days);
                   },
                 }),
               )

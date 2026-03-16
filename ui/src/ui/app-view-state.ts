@@ -1,5 +1,12 @@
 import type { EventLogEntry } from "./app-events.ts";
 import type { CompactionStatus, FallbackStatus } from "./app-tool-stream.ts";
+import type {
+  CCTag,
+  CCRef,
+  CCStats,
+  CCActivityEntry,
+  CCComplianceData,
+} from "./controllers/context-commander.ts";
 import type { CronModelSuggestionsState, CronState } from "./controllers/cron.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
@@ -269,6 +276,20 @@ export type AppViewState = {
     skillEdits: Record<string, string>;
     skillMessages: Record<string, SkillMessage>;
     skillsBusyKey: string | null;
+    ccLoading: boolean;
+    ccTags: CCTag[];
+    ccRefs: CCRef[];
+    ccError: string | null;
+    ccQueryTags: string;
+    ccQueryMinScore: string;
+    ccQueryExact: boolean;
+    ccValidateResult: string | null;
+    ccStats: CCStats | null;
+    ccActivity: CCActivityEntry[];
+    ccActivityLoading: boolean;
+    ccCompliance: CCComplianceData | null;
+    ccComplianceLoading: boolean;
+    ccComplianceDays: number;
     healthLoading: boolean;
     healthResult: HealthSummary | null;
     healthError: string | null;

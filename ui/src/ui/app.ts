@@ -401,6 +401,22 @@ export class OpenClawApp extends LitElement {
   @state() skillsBusyKey: string | null = null;
   @state() skillMessages: Record<string, SkillMessage> = {};
 
+  @state() ccLoading = false;
+  @state() ccTags: import("./controllers/context-commander.ts").CCTag[] = [];
+  @state() ccRefs: import("./controllers/context-commander.ts").CCRef[] = [];
+  @state() ccError: string | null = null;
+  @state() ccQueryTags = "";
+  @state() ccQueryMinScore = "0.5";
+  @state() ccQueryExact = false;
+  @state() ccValidateResult: string | null = null;
+  @state() ccStats: import("./controllers/context-commander.ts").CCStats | null = null;
+  @state() ccActivity: import("./controllers/context-commander.ts").CCActivityEntry[] = [];
+  @state() ccActivityLoading = false;
+  @state() ccCompliance: import("./controllers/context-commander.ts").CCComplianceData | null =
+    null;
+  @state() ccComplianceLoading = false;
+  @state() ccComplianceDays = 7;
+
   @state() healthLoading = false;
   @state() healthResult: HealthSummary | null = null;
   @state() healthError: string | null = null;
