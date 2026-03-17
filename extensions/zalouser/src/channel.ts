@@ -6,7 +6,6 @@ import {
 import type {
   ChannelAccountSnapshot,
   ChannelDirectoryEntry,
-  ChannelDock,
   ChannelGroupContext,
   ChannelMessageActionAdapter,
   ChannelPlugin,
@@ -42,7 +41,8 @@ import { probeZalouser } from "./probe.js";
 import { writeQrDataUrlToTempFile } from "./qr-temp-file.js";
 import { getZalouserRuntime } from "./runtime.js";
 import { sendMessageZalouser, sendReactionZalouser } from "./send.js";
-import { zalouserSetupAdapter, zalouserSetupWizard } from "./setup-surface.js";
+import { zalouserSetupAdapter } from "./setup-core.js";
+import { zalouserSetupWizard } from "./setup-surface.js";
 import { collectZalouserStatusIssues } from "./status-issues.js";
 import {
   listZaloFriendsMatching,
@@ -65,6 +65,8 @@ const meta = {
   order: 85,
   quickstartAllowFrom: true,
 };
+
+const ZALOUSER_TEXT_CHUNK_LIMIT = 2000;
 
 function stripZalouserTargetPrefix(raw: string): string {
   return raw
@@ -171,7 +173,7 @@ function resolveZalouserOutboundChunkMode(cfg: OpenClawConfig, accountId?: strin
 
 function resolveZalouserOutboundTextChunkLimit(cfg: OpenClawConfig, accountId?: string) {
   return getZalouserRuntime().channel.text.resolveTextChunkLimit(cfg, "zalouser", accountId, {
-    fallbackLimit: zalouserDock.outbound?.textChunkLimit ?? 2000,
+    fallbackLimit: ZALOUSER_TEXT_CHUNK_LIMIT,
   });
 }
 
@@ -300,29 +302,6 @@ const zalouserMessageActions: ChannelMessageActionAdapter = {
         threadId,
       },
     };
-  },
-};
-
-export const zalouserDock: ChannelDock = {
-  id: "zalouser",
-  capabilities: {
-    chatTypes: ["direct", "group"],
-    media: true,
-    blockStreaming: true,
-  },
-  outbound: { textChunkLimit: 2000 },
-  config: {
-    resolveAllowFrom: ({ cfg, accountId }) =>
-      mapAllowFromEntries(resolveZalouserAccountSync({ cfg: cfg, accountId }).config.allowFrom),
-    formatAllowFrom: ({ allowFrom }) =>
-      formatAllowFromLowercase({ allowFrom, stripPrefixRe: /^(zalouser|zlu):/i }),
-  },
-  groups: {
-    resolveRequireMention: resolveZalouserRequireMention,
-    resolveToolPolicy: resolveZalouserGroupToolPolicy,
-  },
-  threading: {
-    resolveReplyToMode: () => "off",
   },
 };
 

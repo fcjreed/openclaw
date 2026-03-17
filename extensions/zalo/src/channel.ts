@@ -8,7 +8,6 @@ import {
 } from "openclaw/plugin-sdk/compat";
 import type {
   ChannelAccountSnapshot,
-  ChannelDock,
   ChannelPlugin,
   OpenClawConfig,
 } from "openclaw/plugin-sdk/zalo";
@@ -40,7 +39,8 @@ import { probeZalo } from "./probe.js";
 import { resolveZaloProxyFetch } from "./proxy.js";
 import { normalizeSecretInputString } from "./secret-input.js";
 import { sendMessageZalo } from "./send.js";
-import { zaloSetupAdapter, zaloSetupWizard } from "./setup-surface.js";
+import { zaloSetupAdapter } from "./setup-core.js";
+import { zaloSetupWizard } from "./setup-surface.js";
 import { collectZaloStatusIssues } from "./status-issues.js";
 
 const meta = {
@@ -62,28 +62,6 @@ function normalizeZaloMessagingTarget(raw: string): string | undefined {
   }
   return trimmed.replace(/^(zalo|zl):/i, "");
 }
-
-export const zaloDock: ChannelDock = {
-  id: "zalo",
-  capabilities: {
-    chatTypes: ["direct", "group"],
-    media: true,
-    blockStreaming: true,
-  },
-  outbound: { textChunkLimit: 2000 },
-  config: {
-    resolveAllowFrom: ({ cfg, accountId }) =>
-      mapAllowFromEntries(resolveZaloAccount({ cfg: cfg, accountId }).config.allowFrom),
-    formatAllowFrom: ({ allowFrom }) =>
-      formatAllowFromLowercase({ allowFrom, stripPrefixRe: /^(zalo|zl):/i }),
-  },
-  groups: {
-    resolveRequireMention: () => true,
-  },
-  threading: {
-    resolveReplyToMode: () => "off",
-  },
-};
 
 export const zaloPlugin: ChannelPlugin<ResolvedZaloAccount> = {
   id: "zalo",
